@@ -3,33 +3,33 @@ CREATE TABLE genre (
     name TEXT NOT NULL UNIQUE
 );
 
-CREATE TABLE geschaefte (
+CREATE TABLE stores (
     id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     name TEXT NOT NULL,
-    ort TEXT
+    location TEXT
 );
 
-CREATE TABLE produkte (
+CREATE TABLE products (
     id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     name TEXT NOT NULL,
     genre_id INT NOT NULL,
-    einheit TEXT,
+    unit TEXT,
     CONSTRAINT fk_genre FOREIGN KEY (genre_id)
         REFERENCES genre(id)
         ON DELETE CASCADE
 );
 
-CREATE TABLE preise (
+CREATE TABLE prices (
     id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-    produkt_id INT NOT NULL,
-    geschaeft_id INT NOT NULL,
-    datum DATE NOT NULL,
-    preis_euro NUMERIC(10,2) NOT NULL,
-    quelle TEXT,
-    CONSTRAINT fk_produkt FOREIGN KEY (produkt_id)
-        REFERENCES produkte(id)
+    product_id INT NOT NULL,
+    store_id INT NOT NULL,
+    date DATE NOT NULL,
+    price_euro NUMERIC(10,2) NOT NULL,
+    source TEXT,
+    CONSTRAINT fk_product FOREIGN KEY (product_id)
+        REFERENCES products(id)
         ON DELETE CASCADE,
-    CONSTRAINT fk_geschaeft FOREIGN KEY (geschaeft_id)
-        REFERENCES geschaefte(id)
+    CONSTRAINT fk_store FOREIGN KEY (store_id)
+        REFERENCES stores(id)
         ON DELETE CASCADE
 );
