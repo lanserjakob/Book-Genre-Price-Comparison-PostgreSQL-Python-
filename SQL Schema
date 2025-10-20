@@ -29,7 +29,7 @@ CREATE TABLE prices (
     product_id INT NOT NULL,
     store_id INT NOT NULL,
     date DATE NOT NULL,
-    price_euro NUMERIC(10,2) NOT NULL,
+    price_gbp NUMERIC(10,2) NOT NULL,
     source TEXT,
     CONSTRAINT fk_product FOREIGN KEY (product_id)
         REFERENCES products(id)
@@ -38,3 +38,12 @@ CREATE TABLE prices (
         REFERENCES stores(id)
         ON DELETE CASCADE
 );
+
+ALTER TABLE genre
+ADD CONSTRAINT unique_genre_name UNIQUE (name);
+
+ALTER TABLE stores
+ADD CONSTRAINT unique_store_name UNIQUE (name);
+
+ALTER TABLE products
+ADD CONSTRAINT unique_product_name UNIQUE (name);
