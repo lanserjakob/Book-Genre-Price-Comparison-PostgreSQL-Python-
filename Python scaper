@@ -1,0 +1,159 @@
+import requests
+from bs4 import BeautifulSoup
+import psycopg2
+from datetime import date
+import re
+from urllib.parse import urljoin
+
+BASE_URL = "https://books.toscrape.com/"
+
+###########################
+### Database connection ###
+###########################
+
+# Input your connection
+
+conn = psycopg2.connect(
+    host="your_host",
+    port=your_port,
+    dbname="your_dbname",
+    user="your_user",
+    password="your_password"
+)
+cur = conn.cursor()
+
+#######################
+### Helper function ###
+#######################
+
+def clean_price(price_text):
+    """Normalize price string (£XX.XX) and convert to float."""
+    price_text = price_text.encode("latin1").decode("utf-8", errors="ignore")
+    price_text = re.sub(r"[^\d.,]", "", price_text)  # remove symbols except digits and punctuation
+    price_text = price_text.replace(",", ".")
+    try:
+        return float(price_text)
+    except ValueError:
+        return None
+
+##########################
+### Get all categories ###
+##########################
+
+def get_genres():
+    """Fetch all genres and their URLs from the homepage."""
+    response = requests.get(BASE_URL)
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    genres = []
+    for li in soup.select(".side_categories ul li ul li a"):
+        genre_name = li.text.strip()
+        genre_url = urljoin(BASE_URL, li["href"])
+        genres.append((genre_name, genre_url))
+
+    print(f" Found {len(genres)} genres.")
+    return genres
+
+#########################
+### Scrape each genre ###
+#########################
+
+def scrape_genre(genre_name, genre_url):
+    """Scrape all books from a specific genre (follows multiple pages)."""
+    books = []
+    page_url = genre_url
+
+    while True:
+        print(f" Scraping {genre_name} - {page_url}")
+        response = requests.get(page_url)
+        if response.status_code != 200:
+            print(f" Failed to fetch {page_url}")
+            break
+
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        # Extract each book
+        for article in soup.select("article.product_pod"):
+            title = article.h3.a["title"].strip()
+            price_text = article.select_one(".price_color").text.strip()
+            price = clean_price(price_text)
+            if price:
+                books.append((title, price, genre_name, "Books to Scrape", page_url))
+
+        # Check for "next" pagination link
+        next_link = soup.select_one("li.next a")
+        if next_link:
+            page_url = urljoin(page_url, next_link["href"])
+        else:
+            break
+
+    print(f" {genre_name}: Found {len(books)} books.")
+    return books
+
+###################
+### Insert data ###
+###################
+
+def insert_price(title, price, genre_name, store_name, source_url):
+    """Insert scraped book info into the PostgreSQL database."""
+    unit = "Book"
+
+    # Ensure genre exists
+    cur.execute("""
+        INSERT INTO genre (name)
+        VALUES (%s)
+        ON CONFLICT (name) DO NOTHING;
+    """, (genre_name,))
+
+    # Ensure store exists
+    cur.execute("""
+        INSERT INTO stores (name, location)
+        VALUES (%s, %s)
+        ON CONFLICT (name) DO NOTHING;
+    """, (store_name, "Online"))
+
+    # Ensure product exists
+    cur.execute("""
+        INSERT INTO products (name, genre_id, unit)
+        VALUES (
+            %s,
+            (SELECT id FROM genre WHERE name = %s),
+            %s
+        )
+        ON CONFLICT (name) DO NOTHING;
+    """, (title, genre_name, unit))
+
+    # Insert price record
+    cur.execute("""
+        INSERT INTO prices (product_id, store_id, date, price_gbp, source)
+        VALUES (
+            (SELECT id FROM products WHERE name = %s),
+            (SELECT id FROM stores WHERE name = %s),
+            %s, %s, %s
+        );
+    """, (title, store_name, date.today(), price, source_url))
+
+    conn.commit()
+
+    # Print result for clarity
+    print(f" Added: {title} - £{price:.2f} ({genre_name})")
+
+#######################
+### Run the scraper ###
+#######################
+
+if __name__ == "__main__":
+    genres = get_genres()
+    all_books = []
+
+    for genre_name, genre_url in genres:
+        all_books.extend(scrape_genre(genre_name, genre_url))
+
+    print(f"\n Inserting {len(all_books)} total books into database...\n")
+
+    for title, price, genre_name, store_name, source_url in all_books:
+        insert_price(title, price, genre_name, store_name, source_url)
+
+    cur.close()
+    conn.close()
+    print("\n Done — all genres scraped and saved.")
