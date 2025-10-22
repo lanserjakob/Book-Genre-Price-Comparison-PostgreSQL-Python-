@@ -1,0 +1,10 @@
+SELECT 
+    g.name AS genre,
+    s.name AS store,
+    ROUND(AVG(pz.price_gbp), 2) AS avg_price_gbp
+FROM prices pz
+JOIN products pr ON pz.product_id = pr.id
+JOIN genre g ON pr.genre_id = g.id
+JOIN stores s ON pz.store_id = s.id
+GROUP BY g.name, s.name
+ORDER BY g.name, avg_price_gbp DESC;
